@@ -11,6 +11,8 @@ import itertools
 from collections import Counter
 import random
 
+from hand_eval import handEval
+
 '''Define key values for the program'''
 RANKS = "23456789TJQKA"
 RANK_VALUES = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}
@@ -33,50 +35,6 @@ SAMPLE_SIZE = 10000 # Number of random samples used to approximate probability
 '''Card object converter'''
 def card(cardStr: str):
     return {'rank': cardStr[0], 'suit': cardStr[1]}
-
-'''Poker hand evaluator - determines the best hand category for a given 5-card combination'''
-def handEval(hand: list[dict]):
-    # Extract ranks and suits from 5-card hand
-    ranks = [card['rank'] for card in hand] # eg. {'A', 'K', 'Q'}
-    suits = [card['suit'] for card in hand] # eg. {D, C}
-
-    # Convert extracted ranks into their numerical values, sorted by descending order
-    rankVals = sorted([RANK_VALUES[rank] for rank in ranks], reverse=True) # eg. [14, 13, 12, 11, 10]
-
-    # Identify special case of Ace-low straight
-    if set(rankVals) == {14, 5, 4, 3, 2}:
-        rankVals = [5, 4, 3, 2, 1] # count the Ace as a 1 in value
-
-    # Count the number of ranks and suits in the hand
-    rankCount = Counter(ranks) # eg. {'A': 2, 'K': 2, 'Q': 1}
-    suitCount = Counter(suits) # eg. {'D': 3, 'C': 2}
-
-    # Identify special poker hands
-    isFlush = max(suitCount.values()) == 5 # every suit in the hand is the same (totalling 5 counts of the same suit)
-    isStraight = (len(rankCount) == 5 and max(rankVals) - min(rankVals) == 4) # there are 5 different consecutive card ranks in the hand
-
-    # Identify 4/3/2 card combos by sorting the rank counts in descending order
-    sortedRankCount = sorted(rankCount.values(), reverse=True)
-
-    # Evaluate the best hand category for the given hand, and return [ranking value, hand name, rankVals (for tiebreakers)]
-    if isStraight and isFlush:
-        return (100 if rankVals[0] == 14 else 90, "Royal Flush" if rankVals[0] == 14 else "Straight Flush", rankVals) # Royal Flush if highest rank is Ace, otherwise Straight Flush
-    elif sortedRankCount == [4, 1]:
-        return (60, "Four of a Kind", rankVals)
-    elif sortedRankCount == [3, 2]:
-        return (40, "Full House", rankVals)
-    elif isFlush:
-        return (35, "Flush", rankVals)
-    elif isStraight:
-        return (30, "Straight", rankVals)
-    elif sortedRankCount == [3, 1, 1]:
-        return (25, "Three of a Kind", rankVals)
-    elif sortedRankCount == [2, 2, 1]:
-        return (20, "Two Pair", rankVals)
-    elif sortedRankCount == [2, 1, 1, 1]:
-        return (10, "Pair", rankVals)
-    else:
-        return (5, "High Card", rankVals)
 
 '''Poker odds calculator'''
 def calcOdds(hole: list[dict], community: list[dict]):
@@ -191,75 +149,6 @@ def main():
     for handType, probability in probabilities.items():
         print(f"{handType}: {probability * 100:.2f}%")
 
-
-# Testing suite below
-
-import unittest
-
-class TestFunction(unittest.TestCase):
-
-    '''Test card creation'''
-    def test_card(self):
-        c = card("AS")
-        self.assertEqual(c, {"rank": "A", "suit": "S"})
-
-    '''Test poker hand evaluator'''
-    def test_handEvalALS(self): # Test Ace-low straight
-        hand = [{'rank': "A", 'suit': "S"}, {'rank': "2", 'suit': "S"}, {'rank': "3", 'suit': "S"}, {'rank': "4", 'suit': "S"}, {'rank': "5", 'suit': "D"}]
-        expected_output = (30, "Straight", [5, 4, 3, 2, 1])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalRF(self): # Test royal flush
-        hand = [{'rank': "A", 'suit': "S"}, {'rank': "K", 'suit': "S"}, {'rank': "Q", 'suit': "S"}, {'rank': "J", 'suit': "S"}, {'rank': "T", 'suit': "S"}]
-        expected_output = (100, "Royal Flush", [14, 13, 12, 11, 10])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalSF(self): # Test straight flush
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "K", 'suit': "S"}, {'rank': "Q", 'suit': "S"}, {'rank': "J", 'suit': "S"}, {'rank': "T", 'suit': "S"}]
-        expected_output = (90, "Straight Flush", [13, 12, 11, 10, 9])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalFour(self): # Test four of a kind
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "9", 'suit': "H"}, {'rank': "9", 'suit': "C"}, {'rank': "9", 'suit': "D"}, {'rank': "2", 'suit': "S"}]
-        expected_output = (60, "Four of a Kind", [9, 9, 9, 9, 2])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalFH(self): # Test full house
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "9", 'suit': "H"}, {'rank': "9", 'suit': "C"}, {'rank': "8", 'suit': "D"}, {'rank': "8", 'suit': "S"}]
-        expected_output = (40, "Full House", [9, 9, 9, 8, 8])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalFlush(self): # Test flush
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "8", 'suit': "S"}, {'rank': "7", 'suit': "S"}, {'rank': "6", 'suit': "S"}, {'rank': "4", 'suit': "S"}]
-        expected_output = (35, "Flush", [9, 8, 7, 6, 4])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalStraight(self): # Test straight
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "8", 'suit': "S"}, {'rank': "7", 'suit': "S"}, {'rank': "6", 'suit': "S"}, {'rank': "5", 'suit': "D"}]
-        expected_output = (30, "Straight", [9, 8, 7, 6, 5])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalThree(self): # Test three of a kind
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "9", 'suit': "H"}, {'rank': "9", 'suit': "C"}, {'rank': "6", 'suit': "S"}, {'rank': "5", 'suit': "D"}]
-        expected_output = (25, "Three of a Kind", [9, 9, 9, 6, 5])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalTP(self): # Test two pair
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "9", 'suit': "H"}, {'rank': "6", 'suit': "C"}, {'rank': "6", 'suit': "S"}, {'rank': "5", 'suit': "D"}]
-        expected_output = (20, "Two Pair", [9, 9, 6, 6, 5])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalPair(self): # Test pair
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "9", 'suit': "H"}, {'rank': "7", 'suit': "C"}, {'rank': "6", 'suit': "S"}, {'rank': "5", 'suit': "D"}]
-        expected_output = (10, "Pair", [9, 9, 7, 6, 5])
-        self.assertEqual(handEval(hand), expected_output)
-
-    def test_handEvalHigh(self): # Test high card
-        hand = [{'rank': "9", 'suit': "S"}, {'rank': "8", 'suit': "H"}, {'rank': "7", 'suit': "C"}, {'rank': "6", 'suit': "S"}, {'rank': "4", 'suit': "D"}]
-        expected_output = (5, "High Card", [9, 8, 7, 6, 4])
-        self.assertEqual(handEval(hand), expected_output)
-
-# Run testing suite and then the main program when file is executed
+# Run the main calculator program when file is executed
 if __name__ == "__main__":
-    unittest.main(exit=False)
     main()
